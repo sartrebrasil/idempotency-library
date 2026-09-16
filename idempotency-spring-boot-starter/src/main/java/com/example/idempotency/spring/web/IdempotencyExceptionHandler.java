@@ -3,6 +3,8 @@ package com.example.idempotency.spring.web;
 import com.example.idempotency.exception.IdempotencyInProgressException;
 import com.example.idempotency.exception.IdempotencyKeyConflictException;
 import com.example.idempotency.exception.MissingIdempotencyKeyException;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * redelivered.
  */
 @RestControllerAdvice
+@Order(Ordered.HIGHEST_PRECEDENCE)
 public class IdempotencyExceptionHandler {
 
     @ExceptionHandler(MissingIdempotencyKeyException.class)
@@ -43,3 +46,5 @@ public class IdempotencyExceptionHandler {
         return problem;
     }
 }
+
+

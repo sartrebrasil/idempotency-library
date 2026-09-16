@@ -4,7 +4,9 @@ import com.example.idempotency.core.IdempotencyEngine;
 import com.example.idempotency.spi.IdempotencyStore;
 import com.example.idempotency.spi.ResultSerializer;
 import com.example.idempotency.store.InMemoryIdempotencyStore;
-import com.example.idempotency.spring.aspect.IdempotencyAspect;
+import com.example.idempotency.spring.aspect.IdempotencyAdvisor;
+import com.example.idempotency.spring.aspect.IdempotencyInterceptor;
+import com.example.idempotency.spring.aspect.IdempotentMetadata;
 import com.example.idempotency.spring.aspect.PayloadFingerprinter;
 import com.example.idempotency.spring.key.AnnotatedParameterKeyResolver;
 import com.example.idempotency.spring.key.ExpressionKeyResolver;
@@ -27,9 +29,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Role;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -91,8 +95,14 @@ public class IdempotencyAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public AnnotatedParameterKeyResolver annotatedParameterKeyResolver() {
-        return new AnnotatedParameterKeyResolver();
+    public IdempotentMetadata idempotentMetadata() {
+        return new IdempotentMetadata();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AnnotatedParameterKeyResolver annotatedParameterKeyResolver(IdempotentMetadata metadata) {
+        return new AnnotatedParameterKeyResolver(metadata);
     }
 
     @Bean
@@ -111,9 +121,16 @@ public class IdempotencyAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public IdempotencyAspect idempotencyAspect(IdempotencyEngine engine, List<KeyResolver> keyResolvers,
-            PayloadFingerprinter fingerprinter, IdempotencyProperties properties) {
-        return new IdempotencyAspect(engine, keyResolvers, fingerprinter, properties.getDefaultTtl());
+    public IdempotencyInterceptor idempotencyInterceptor(IdempotencyEngine engine, List<KeyResolver> keyResolvers,
+            PayloadFingerprinter fingerprinter, IdempotentMetadata metadata, IdempotencyProperties properties) {
+        return new IdempotencyInterceptor(engine, keyResolvers, fingerprinter, metadata, properties.getDefaultTtl());
+    }
+
+    @Bean
+    @Role(BeanDefinition.ROLE_INFRASTRUCTURE)
+    @ConditionalOnMissingBean
+    public IdempotencyAdvisor idempotencyAdvisor(IdempotentMetadata metadata, IdempotencyInterceptor interceptor) {
+        return new IdempotencyAdvisor(metadata, interceptor);
     }
 
     @Bean

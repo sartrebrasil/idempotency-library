@@ -91,6 +91,36 @@ e fora de HTTP. Use `@Idempotent(scope = "...")` para compartilhar o escopo
 entre dois pontos de entrada da mesma operação (por exemplo o endpoint REST e o
 consumidor de fila que fazem a mesma coisa).
 
+## Anotação declarada na interface
+
+Funciona: tanto `@Idempotent` quanto `@IdempotentKey` podem ficar só no
+contrato, e a implementação não precisa repeti-los.
+
+```java
+public interface PaymentGateway {
+    @Idempotent(ttl = "PT5M")
+    Receipt charge(@IdempotentKey String transactionId, Money amount);
+}
+
+@Service
+class StripePaymentGateway implements PaymentGateway {
+    @Override
+    public Receipt charge(String transactionId, Money amount) { ... }   // sem anotação
+}
+```
+
+Java não herda anotações de método, e o pointcut `@annotation(...)` do Spring
+AOP só enxerga o que está fisicamente no método da classe alvo — por isso a
+biblioteca usa um *advisor* próprio (`IdempotencyAdvisor`), que percorre a
+hierarquia do método (implementação, interfaces e superclasses). É o mesmo
+motivo pelo qual `@Transactional` funciona em interface.
+
+Duas ressalvas, iguais às de qualquer proxy Spring: a chamada tem que passar
+pelo bean (auto-invocação `this.charge(...)` não é interceptada), e o escopo
+default nomeia a **classe concreta** — duas implementações da mesma interface
+têm escopos distintos. Se as duas devem compartilhar a janela de deduplicação,
+declare `@Idempotent(scope = "pagamentos#cobrar")`.
+
 ## Opções de `@Idempotent`
 
 | Atributo | Default | Efeito |
