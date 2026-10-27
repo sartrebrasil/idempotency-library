@@ -30,8 +30,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "idempotency.store=mongo",
         "spring.main.web-application-type=none",
         "spring.autoconfigure.exclude="
-                + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
-                + "org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration"
+                + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
+                + "org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration"
 })
 @Testcontainers
 class MongoIdempotencyStoreIT extends AbstractIdempotencyStoreContractTest {
@@ -42,7 +42,7 @@ class MongoIdempotencyStoreIT extends AbstractIdempotencyStoreContractTest {
 
     @DynamicPropertySource
     static void mongo(DynamicPropertyRegistry registry) {
-        registry.add("spring.data.mongodb.uri", MONGO::getReplicaSetUrl);
+        registry.add("spring.mongodb.uri", MONGO::getReplicaSetUrl);
     }
 
     @Autowired

@@ -19,10 +19,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "idempotency.store=memory",
         "spring.main.web-application-type=none",
         "spring.autoconfigure.exclude="
-                + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
-                + "org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration,"
-                + "org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration,"
-                + "org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration"
+                + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
+                + "org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration,"
+                + "org.springframework.boot.mongodb.autoconfigure.MongoAutoConfiguration,"
+                + "org.springframework.boot.data.mongodb.autoconfigure.DataMongoAutoConfiguration"
 })
 class IdempotencyListenerTest {
 

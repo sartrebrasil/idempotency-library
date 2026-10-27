@@ -26,9 +26,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "idempotency.store=redis",
         "spring.main.web-application-type=none",
         "spring.autoconfigure.exclude="
-                + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
-                + "org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration,"
-                + "org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration"
+                + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
+                + "org.springframework.boot.mongodb.autoconfigure.MongoAutoConfiguration,"
+                + "org.springframework.boot.data.mongodb.autoconfigure.DataMongoAutoConfiguration"
 })
 @Testcontainers
 class RedisIdempotencyStoreIT extends AbstractIdempotencyStoreContractTest {

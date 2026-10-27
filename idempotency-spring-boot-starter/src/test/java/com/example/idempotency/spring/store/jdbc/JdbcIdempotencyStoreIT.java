@@ -32,9 +32,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "spring.sql.init.mode=always",
         "spring.sql.init.schema-locations=classpath:schema/idempotency-record-postgres.sql",
         "spring.autoconfigure.exclude="
-                + "org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration,"
-                + "org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration,"
-                + "org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration"
+                + "org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration,"
+                + "org.springframework.boot.mongodb.autoconfigure.MongoAutoConfiguration,"
+                + "org.springframework.boot.data.mongodb.autoconfigure.DataMongoAutoConfiguration"
 })
 @Testcontainers
 class JdbcIdempotencyStoreIT extends AbstractIdempotencyStoreContractTest {
