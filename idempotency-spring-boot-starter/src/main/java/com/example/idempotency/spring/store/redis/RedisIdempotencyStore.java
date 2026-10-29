@@ -4,9 +4,9 @@ import com.example.idempotency.exception.IdempotencyStoreException;
 import com.example.idempotency.model.IdempotencyKeyId;
 import com.example.idempotency.model.IdempotencyRecord;
 import com.example.idempotency.spi.IdempotencyStore;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 import java.util.Optional;
@@ -81,7 +81,7 @@ public class RedisIdempotencyStore implements IdempotencyStore {
     private String write(IdempotencyRecord record) {
         try {
             return mapper.writeValueAsString(record);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IdempotencyStoreException("Could not encode record " + record.id(), e);
         }
     }
@@ -89,7 +89,7 @@ public class RedisIdempotencyStore implements IdempotencyStore {
     private IdempotencyRecord read(String json) {
         try {
             return mapper.readValue(json, IdempotencyRecord.class);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IdempotencyStoreException("Could not decode stored record: " + json, e);
         }
     }

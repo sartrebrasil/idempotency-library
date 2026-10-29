@@ -17,10 +17,6 @@ import com.example.idempotency.spring.store.jdbc.IdempotencyCleanupScheduler;
 import com.example.idempotency.spring.store.jdbc.JdbcIdempotencyStore;
 import com.example.idempotency.spring.store.mongo.MongoIdempotencyStore;
 import com.example.idempotency.spring.store.redis.RedisIdempotencyStore;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -39,6 +35,10 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.PlatformTransactionManager;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Clock;
 import java.util.List;
@@ -69,10 +69,10 @@ public class IdempotencyAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(name = "idempotencyObjectMapper")
     public ObjectMapper idempotencyObjectMapper() {
-        return new ObjectMapper()
-                .registerModule(new JavaTimeModule())
-                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        return JsonMapper.builder()
+                .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .build();
     }
 
     @Bean

@@ -2,12 +2,11 @@ package com.example.idempotency.spring.serializer;
 
 import com.example.idempotency.exception.IdempotencyException;
 import com.example.idempotency.spi.ResultSerializer;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-
-import java.io.IOException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Stores results as JSON, which keeps records readable and survives a redeploy
@@ -36,7 +35,7 @@ public class JacksonResultSerializer implements ResultSerializer {
                         body == null ? null : mapper.valueToTree(body)));
             }
             return mapper.writeValueAsBytes(value);
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             throw new IdempotencyException("Could not serialize result of type " + value.getClass().getName(), e);
         }
     }
@@ -49,12 +48,12 @@ public class JacksonResultSerializer implements ResultSerializer {
                 return rebuildResponse(mapper.readValue(payload, ResponseEnvelope.class));
             }
             return mapper.readValue(payload, type);
-        } catch (IOException | ClassNotFoundException e) {
+        } catch (JacksonException | ClassNotFoundException e) {
             throw new IdempotencyException("Could not deserialize stored result of type " + resultType, e);
         }
     }
 
-    private ResponseEntity<Object> rebuildResponse(ResponseEnvelope envelope) throws IOException, ClassNotFoundException {
+    private ResponseEntity<Object> rebuildResponse(ResponseEnvelope envelope) throws ClassNotFoundException {
         HttpStatus status = HttpStatus.valueOf(envelope.status());
         if (envelope.body() == null) {
             return ResponseEntity.status(status).build();
