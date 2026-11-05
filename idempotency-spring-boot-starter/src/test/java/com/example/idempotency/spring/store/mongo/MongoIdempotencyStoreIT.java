@@ -80,9 +80,10 @@ class MongoIdempotencyStoreIT extends AbstractIdempotencyStoreContractTest {
     @Test
     void completedResultSurvivesAReadBack() {
         IdempotencyKeyId id = newKeyId();
-        store.reserve(candidate(id));
+        IdempotencyRecord reserved = candidate(id);
+        store.reserve(reserved);
 
-        store.complete(id, "java.lang.String", new byte[] { 1, 2, 3, 4 });
+        store.complete(id, reserved.owner(), "java.lang.String", new byte[] { 1, 2, 3, 4 }, null);
 
         assertEquals(4, store.find(id).orElseThrow().resultPayload().length);
     }

@@ -39,6 +39,7 @@ public class MongoIdempotencyStore implements IdempotencyStore {
     private static final String RESULT_PAYLOAD = "resultPayload";
     private static final String CREATED_AT = "createdAt";
     private static final String EXPIRES_AT = "expiresAt";
+    private static final String OWNER = "owner";
 
     private final MongoTemplate mongo;
     private final String collection;
@@ -84,17 +85,25 @@ public class MongoIdempotencyStore implements IdempotencyStore {
     }
 
     @Override
-    public void complete(IdempotencyKeyId id, String resultType, byte[] resultPayload) {
+    public boolean complete(IdempotencyKeyId id, String owner, String resultType, byte[] resultPayload,
+            Instant expiresAt) {
         Update update = new Update()
                 .set(STATUS, IdempotencyStatus.COMPLETED.name())
                 .set(RESULT_TYPE, resultType)
                 .set(RESULT_PAYLOAD, resultPayload);
-        mongo.updateFirst(liveQuery(id), update, collection);
+        if (expiresAt != null) {
+            update.set(EXPIRES_AT, Date.from(expiresAt));
+        }
+        Query query = liveQuery(id);
+        query.addCriteria(Criteria.where(OWNER).is(owner));
+        return mongo.updateFirst(query, update, collection).getMatchedCount() > 0;
     }
 
     @Override
-    public void release(IdempotencyKeyId id) {
-        mongo.remove(byId(id), collection);
+    public boolean release(IdempotencyKeyId id, String owner) {
+        Query query = byId(id);
+        query.addCriteria(Criteria.where(OWNER).is(owner));
+        return mongo.remove(query, collection).getDeletedCount() > 0;
     }
 
     @Override
@@ -122,7 +131,8 @@ public class MongoIdempotencyStore implements IdempotencyStore {
                 .append(RESULT_TYPE, record.resultType())
                 .append(RESULT_PAYLOAD, record.resultPayload())
                 .append(CREATED_AT, Date.from(record.createdAt()))
-                .append(EXPIRES_AT, Date.from(record.expiresAt()));
+                .append(EXPIRES_AT, Date.from(record.expiresAt()))
+                .append(OWNER, record.owner());
     }
 
     private IdempotencyRecord toRecord(Document document) {
@@ -133,7 +143,8 @@ public class MongoIdempotencyStore implements IdempotencyStore {
                 document.getString(RESULT_TYPE),
                 payloadOf(document),
                 instant(document, CREATED_AT),
-                instant(document, EXPIRES_AT));
+                instant(document, EXPIRES_AT),
+                document.getString(OWNER));
     }
 
     private byte[] payloadOf(Document document) {

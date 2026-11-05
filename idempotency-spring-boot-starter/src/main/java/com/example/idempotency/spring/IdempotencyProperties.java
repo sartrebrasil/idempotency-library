@@ -1,5 +1,7 @@
 package com.example.idempotency.spring;
 
+import com.example.idempotency.spring.store.jdbc.JdbcIdempotencyStore;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
@@ -101,6 +103,20 @@ public class IdempotencyProperties {
 
         /** Delay between purge runs. */
         private Duration cleanupInterval = Duration.ofMinutes(15);
+
+        /**
+         * {@code requires-new}: writes in their own transaction. {@code join}: writes join the caller's
+         * transaction (reserve in a savepoint), so they commit with the business work.
+         */
+        private JdbcIdempotencyStore.TransactionMode transactionMode = JdbcIdempotencyStore.TransactionMode.REQUIRES_NEW;
+
+        public JdbcIdempotencyStore.TransactionMode getTransactionMode() {
+            return transactionMode;
+        }
+
+        public void setTransactionMode(JdbcIdempotencyStore.TransactionMode transactionMode) {
+            this.transactionMode = transactionMode;
+        }
 
         public boolean isCleanupEnabled() {
             return cleanupEnabled;

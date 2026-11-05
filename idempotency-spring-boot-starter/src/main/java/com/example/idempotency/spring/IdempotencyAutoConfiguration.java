@@ -162,8 +162,9 @@ public class IdempotencyAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean(IdempotencyStore.class)
         JdbcIdempotencyStore jdbcIdempotencyStore(JdbcTemplate jdbcTemplate,
-                PlatformTransactionManager transactionManager, Clock clock) {
-            return new JdbcIdempotencyStore(jdbcTemplate, transactionManager, clock);
+                PlatformTransactionManager transactionManager, Clock clock, IdempotencyProperties properties) {
+            return new JdbcIdempotencyStore(jdbcTemplate, transactionManager, clock,
+                    properties.getJdbc().getTransactionMode());
         }
 
         @Configuration(proxyBeanMethods = false)
@@ -188,9 +189,9 @@ public class IdempotencyAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean(IdempotencyStore.class)
         RedisIdempotencyStore redisIdempotencyStore(StringRedisTemplate redisTemplate,
-                ObjectMapper idempotencyObjectMapper, IdempotencyProperties properties) {
+                ObjectMapper idempotencyObjectMapper, IdempotencyProperties properties, Clock clock) {
             return new RedisIdempotencyStore(redisTemplate, idempotencyObjectMapper,
-                    properties.getRedis().getKeyPrefix());
+                    properties.getRedis().getKeyPrefix(), clock);
         }
     }
 

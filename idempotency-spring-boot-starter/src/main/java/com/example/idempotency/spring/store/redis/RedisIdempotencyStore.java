@@ -5,12 +5,16 @@ import com.example.idempotency.model.IdempotencyKeyId;
 import com.example.idempotency.model.IdempotencyRecord;
 import com.example.idempotency.spi.IdempotencyStore;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Redis store. Atomicity is {@code SET key value NX PX ttl} — one round trip,
@@ -19,17 +23,45 @@ import java.util.concurrent.TimeUnit;
  * <p>Durability is Redis' durability: with AOF/RDB off, a crash can drop keys
  * before their TTL and let an operation run twice. For payments and the like,
  * prefer the relational store or enable {@code appendfsync everysec} at least.
+ *
+ * <p>{@code complete} and {@code release} are Lua scripts that compare the
+ * stored owner token and write in the same atomic step.
  */
 public class RedisIdempotencyStore implements IdempotencyStore {
+
+    /** ARGV: owner, new record JSON, TTL in ms ({@code -1} keeps the remaining TTL). */
+    private static final RedisScript<Long> COMPLETE = new DefaultRedisScript<>("""
+            local v = redis.call('GET', KEYS[1])
+            if not v or cjson.decode(v).owner ~= ARGV[1] then return 0 end
+            local ttl = tonumber(ARGV[3])
+            if ttl < 0 then ttl = redis.call('PTTL', KEYS[1]) end
+            if ttl <= 0 then return 0 end
+            redis.call('SET', KEYS[1], ARGV[2], 'PX', ttl)
+            return 1
+            """, Long.class);
+
+    /** ARGV: owner. */
+    private static final RedisScript<Long> RELEASE = new DefaultRedisScript<>("""
+            local v = redis.call('GET', KEYS[1])
+            if not v or cjson.decode(v).owner ~= ARGV[1] then return 0 end
+            redis.call('DEL', KEYS[1])
+            return 1
+            """, Long.class);
 
     private final StringRedisTemplate redis;
     private final ObjectMapper mapper;
     private final String keyPrefix;
+    private final Clock clock;
 
     public RedisIdempotencyStore(StringRedisTemplate redis, ObjectMapper mapper, String keyPrefix) {
+        this(redis, mapper, keyPrefix, Clock.systemUTC());
+    }
+
+    public RedisIdempotencyStore(StringRedisTemplate redis, ObjectMapper mapper, String keyPrefix, Clock clock) {
         this.redis = redis;
         this.mapper = mapper;
         this.keyPrefix = keyPrefix;
+        this.clock = clock;
     }
 
     @Override
@@ -47,25 +79,29 @@ public class RedisIdempotencyStore implements IdempotencyStore {
     }
 
     @Override
-    public void complete(IdempotencyKeyId id, String resultType, byte[] resultPayload) {
-        String key = redisKey(id);
+    public boolean complete(IdempotencyKeyId id, String owner, String resultType, byte[] resultPayload,
+            Instant expiresAt) {
         IdempotencyRecord current = find(id).orElse(null);
-        if (current == null) {
-            return; // expired or released meanwhile
+        if (current == null || !current.ownedBy(owner)) {
+            return false; // expired, released or taken over meanwhile
         }
-        Long remainingMillis = redis.getExpire(key, TimeUnit.MILLISECONDS);
-        if (remainingMillis == null || remainingMillis <= 0) {
-            return;
+        long ttl = -1;
+        if (expiresAt != null) {
+            ttl = Duration.between(clock.instant(), expiresAt).toMillis();
+            if (ttl <= 0) {
+                return false;
+            }
         }
-        // SET ... XX keeps completion from resurrecting a key that just expired,
-        // and reuses the remaining TTL so the window is not extended.
-        redis.opsForValue().setIfPresent(key, write(current.completedWith(resultType, resultPayload)),
-                Duration.ofMillis(remainingMillis));
+        // The script re-checks the owner, so a takeover between find and here is never overwritten
+        Long done = redis.execute(COMPLETE, List.of(redisKey(id)), owner,
+                write(current.completedWith(resultType, resultPayload, expiresAt)), Long.toString(ttl));
+        return done != null && done == 1L;
     }
 
     @Override
-    public void release(IdempotencyKeyId id) {
-        redis.delete(redisKey(id));
+    public boolean release(IdempotencyKeyId id, String owner) {
+        Long done = redis.execute(RELEASE, List.of(redisKey(id)), owner);
+        return done != null && done == 1L;
     }
 
     @Override

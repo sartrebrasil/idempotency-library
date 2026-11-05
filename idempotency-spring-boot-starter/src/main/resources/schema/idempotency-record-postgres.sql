@@ -9,6 +9,9 @@ CREATE TABLE IF NOT EXISTS idempotency_record (
     result_payload  BYTEA,
     created_at      TIMESTAMP WITH TIME ZONE NOT NULL,
     expires_at      TIMESTAMP WITH TIME ZONE NOT NULL,
+    -- Token of the execution holding the reservation; complete/release match it.
+    -- Upgrading: ALTER TABLE idempotency_record ADD COLUMN owner VARCHAR(64);
+    owner           VARCHAR(64),
     -- The primary key IS the concurrency control: a losing INSERT fails here.
     CONSTRAINT pk_idempotency_record PRIMARY KEY (idempotency_key, scope)
 );

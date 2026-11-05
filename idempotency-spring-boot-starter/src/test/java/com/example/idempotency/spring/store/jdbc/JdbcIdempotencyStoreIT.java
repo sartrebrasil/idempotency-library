@@ -1,5 +1,9 @@
 package com.example.idempotency.spring.store.jdbc;
 
+import java.time.Clock;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import com.example.idempotency.model.IdempotencyStatus;
 import com.example.idempotency.model.IdempotencyKeyId;
 import com.example.idempotency.model.IdempotencyRecord;
 import com.example.idempotency.spi.AbstractIdempotencyStoreContractTest;
@@ -56,6 +60,9 @@ class JdbcIdempotencyStoreIT extends AbstractIdempotencyStoreContractTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     @Override
     protected IdempotencyStore store() {
         return store;
@@ -88,13 +95,38 @@ class JdbcIdempotencyStoreIT extends AbstractIdempotencyStoreContractTest {
     @Test
     void completedResultSurvivesAReadBack() {
         IdempotencyKeyId id = newKeyId();
-        store.reserve(candidate(id));
+        IdempotencyRecord reserved = candidate(id);
+        store.reserve(reserved);
 
-        store.complete(id, "java.lang.String", new byte[] { 1, 2, 3 });
+        store.complete(id, reserved.owner(), "java.lang.String", new byte[] { 1, 2, 3 }, null);
 
         Optional<IdempotencyRecord> stored = store.find(id);
         assertTrue(stored.isPresent());
         assertEquals(3, stored.orElseThrow().resultPayload().length);
+    }
+
+    @Test
+    void joinModeCommitsWithTheCallerAndALostRaceDoesNotPoisonIt() {
+        var joined = new JdbcIdempotencyStore(jdbcTemplate, transactionManager, Clock.systemUTC(),
+                JdbcIdempotencyStore.TransactionMode.JOIN);
+        var tx = new TransactionTemplate(transactionManager);
+        IdempotencyKeyId committed = newKeyId();
+        IdempotencyKeyId rolledBack = newKeyId();
+
+        tx.executeWithoutResult(status -> {
+            IdempotencyRecord mine = candidate(committed);
+            assertTrue(joined.reserve(mine).isEmpty());
+            assertTrue(joined.reserve(candidate(committed)).isPresent(), "a second reserve loses the race");
+            // the savepoint kept the transaction usable after the duplicate key
+            assertTrue(joined.complete(committed, mine.owner(), null, null, null));
+        });
+        tx.executeWithoutResult(status -> {
+            assertTrue(joined.reserve(candidate(rolledBack)).isEmpty());
+            status.setRollbackOnly();
+        });
+
+        assertEquals(IdempotencyStatus.COMPLETED, store.find(committed).orElseThrow().status());
+        assertTrue(store.find(rolledBack).isEmpty(), "the reservation rolls back with the caller");
     }
 
     private int countRows(IdempotencyKeyId id) {

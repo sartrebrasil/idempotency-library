@@ -67,9 +67,9 @@ class RedisIdempotencyStoreIT extends AbstractIdempotencyStoreContractTest {
     void completionKeepsTheRemainingTtl() {
         IdempotencyKeyId id = newKeyId();
         Instant now = Instant.now();
-        store.reserve(IdempotencyRecord.inProgress(id, "fp", now, now.plusSeconds(2)));
+        store.reserve(IdempotencyRecord.inProgress(id, "me", "fp", now, now.plusSeconds(2)));
 
-        store.complete(id, "java.lang.String", new byte[] { 7 });
+        store.complete(id, "me", "java.lang.String", new byte[] { 7 }, null);
         assertEquals(1, store.find(id).orElseThrow().resultPayload().length);
 
         Awaitility.await().atMost(Duration.ofSeconds(6))

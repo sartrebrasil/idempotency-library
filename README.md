@@ -174,9 +174,22 @@ CREATE TABLE idempotency_record (
     result_payload  BYTEA,
     created_at      TIMESTAMP WITH TIME ZONE NOT NULL,
     expires_at      TIMESTAMP WITH TIME ZONE NOT NULL,
+    owner           VARCHAR(64),
     CONSTRAINT pk_idempotency_record PRIMARY KEY (idempotency_key, scope)
 );
 ```
+
+**Owner token.** Cada reserva guarda o token de quem a fez (`owner`), e
+`complete`/`release` só valem para esse dono, de forma atômica: `WHERE owner = ?`
+no JDBC, filtro no Mongo e script Lua no Redis. Um chamador lento, cuja
+reserva expirou e foi assumida por outro, não apaga nem sobrescreve o registro
+do novo dono. `complete` também aceita uma nova expiração, para separar o TTL
+curto da reserva do TTL longo do registro concluído.
+
+Atualizando uma tabela existente:
+`ALTER TABLE idempotency_record ADD COLUMN owner VARCHAR(64);`. Registros
+antigos ficam com `owner` nulo e não podem ser concluídos nem liberados; eles
+apenas expiram.
 
 ## Configuração
 
@@ -189,6 +202,7 @@ CREATE TABLE idempotency_record (
 | `idempotency.web-exception-handler` | `true` | mapeia as exceções para 400/409/422 |
 | `idempotency.jdbc.cleanup-enabled` | `true` | job de limpeza de registros expirados |
 | `idempotency.jdbc.cleanup-interval` | `PT15M` | intervalo do job |
+| `idempotency.jdbc.transaction-mode` | `requires-new` | `requires-new`: escritas em transação própria. `join`: escritas entram na transação de quem chama (reserva num savepoint), confirmando junto com o negócio |
 | `idempotency.redis.key-prefix` | `idempotency:` | prefixo das chaves |
 | `idempotency.mongo.collection` | `idempotency_record` | coleção usada |
 
