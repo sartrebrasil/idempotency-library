@@ -202,7 +202,7 @@ apenas expiram.
 | `idempotency.web-exception-handler` | `true` | mapeia as exceções para 400/409/422 |
 | `idempotency.jdbc.cleanup-enabled` | `true` | job de limpeza de registros expirados |
 | `idempotency.jdbc.cleanup-interval` | `PT15M` | intervalo do job |
-| `idempotency.jdbc.transaction-mode` | `requires-new` | `requires-new`: escritas em transação própria. `join`: escritas entram na transação de quem chama (reserva num savepoint), confirmando junto com o negócio |
+| `idempotency.jdbc.transaction-mode` | `requires-new` | `requires-new`: escritas em transação própria. `join`: escritas entram na transação de quem chama (reserva num savepoint), confirmando junto com o negócio. `join` exige transaction manager com savepoints, como o `DataSourceTransactionManager` |
 | `idempotency.redis.key-prefix` | `idempotency:` | prefixo das chaves |
 | `idempotency.mongo.collection` | `idempotency_record` | coleção usada |
 
