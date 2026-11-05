@@ -67,7 +67,8 @@ public abstract class AbstractIdempotencyStoreContractTest {
         IdempotencyRecord reserved = candidate(id);
         store().reserve(reserved);
 
-        store().complete(id, "java.lang.String", "hello".getBytes(StandardCharsets.UTF_8));
+        assertTrue(store().complete(id, reserved.owner(), "java.lang.String", "hello".getBytes(StandardCharsets.UTF_8),
+                null));
 
         IdempotencyRecord stored = store().find(id).orElseThrow();
         assertEquals(IdempotencyStatus.COMPLETED, stored.status());
@@ -80,9 +81,10 @@ public abstract class AbstractIdempotencyStoreContractTest {
     @Test
     void completeWithoutPayloadKeepsTheKeyReserved() {
         IdempotencyKeyId id = newKeyId();
-        store().reserve(candidate(id));
+        IdempotencyRecord reserved = candidate(id);
+        store().reserve(reserved);
 
-        store().complete(id, null, null);
+        store().complete(id, reserved.owner(), null, null, null);
 
         IdempotencyRecord stored = store().find(id).orElseThrow();
         assertEquals(IdempotencyStatus.COMPLETED, stored.status());
@@ -92,9 +94,10 @@ public abstract class AbstractIdempotencyStoreContractTest {
     @Test
     void releaseFreesTheKeyForRetry() {
         IdempotencyKeyId id = newKeyId();
-        store().reserve(candidate(id));
+        IdempotencyRecord reserved = candidate(id);
+        store().reserve(reserved);
 
-        store().release(id);
+        assertTrue(store().release(id, reserved.owner()));
 
         assertTrue(store().find(id).isEmpty());
         assertTrue(store().reserve(candidate(id)).isEmpty(), "released key must be reservable again");
@@ -104,10 +107,54 @@ public abstract class AbstractIdempotencyStoreContractTest {
     void completeAndReleaseOnUnknownKeyAreNoOps() {
         IdempotencyKeyId id = newKeyId();
 
-        store().complete(id, "java.lang.String", new byte[] { 1 });
-        store().release(id);
+        assertFalse(store().complete(id, "someone", "java.lang.String", new byte[] { 1 }, null));
+        assertFalse(store().release(id, "someone"));
 
         assertTrue(store().find(id).isEmpty());
+    }
+
+    @Test
+    void completeCanMoveTheExpiryToTheCompletedWindow() {
+        IdempotencyKeyId id = newKeyId();
+        IdempotencyRecord reserved = candidate(id);
+        store().reserve(reserved);
+        Instant later = reserved.expiresAt().plus(Duration.ofDays(7));
+
+        assertTrue(store().complete(id, reserved.owner(), null, null, later));
+
+        assertEquals(later.toEpochMilli(), store().find(id).orElseThrow().expiresAt().toEpochMilli());
+    }
+
+    @Test
+    void anotherOwnerCannotCompleteOrRelease() {
+        IdempotencyKeyId id = newKeyId();
+        IdempotencyRecord reserved = candidate(id);
+        store().reserve(reserved);
+
+        assertFalse(store().complete(id, "intruder", "java.lang.String", new byte[] { 1 }, null));
+        assertFalse(store().release(id, "intruder"));
+
+        IdempotencyRecord stored = store().find(id).orElseThrow();
+        assertEquals(IdempotencyStatus.IN_PROGRESS, stored.status());
+        assertEquals(reserved.owner(), stored.owner());
+    }
+
+    @Test
+    void theFormerOwnerCannotTouchTheRecordOfTheOneThatTookTheKeyOver() {
+        IdempotencyKeyId id = newKeyId();
+        IdempotencyRecord first = candidate(id);
+        store().reserve(first);
+        store().release(id, first.owner());
+        IdempotencyRecord second = candidate(id);
+        assertTrue(store().reserve(second).isEmpty());
+
+        assertFalse(store().complete(id, first.owner(), "java.lang.String", new byte[] { 1 }, null));
+        assertFalse(store().release(id, first.owner()));
+
+        IdempotencyRecord stored = store().find(id).orElseThrow();
+        assertEquals(IdempotencyStatus.IN_PROGRESS, stored.status());
+        assertEquals(second.owner(), stored.owner());
+        assertTrue(store().complete(id, second.owner(), null, null, null));
     }
 
     @Test

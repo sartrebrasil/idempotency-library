@@ -94,10 +94,11 @@ class IdempotencyEngineTest {
     @Test
     void waitingForCompletionReplaysTheOtherExecutionResult() throws Throwable {
         IdempotencyKeyId id = keyId("order-5");
-        store.reserve(IdempotencyRecord.inProgress(id, "fp-a", clock.instant(), clock.instant().plus(TTL)));
+        store.reserve(IdempotencyRecord.inProgress(id, "other", "fp-a", clock.instant(), clock.instant().plus(TTL)));
         Thread other = new Thread(() -> {
             sleep(50);
-            store.complete(id, String.class.getName(), new JdkResultSerializer().serialize("from-other-thread"));
+            store.complete(id, "other", String.class.getName(),
+                    new JdkResultSerializer().serialize("from-other-thread"), null);
         });
         other.start();
 
@@ -120,10 +121,10 @@ class IdempotencyEngineTest {
     @Test
     void waitingTakesOverWhenTheOtherExecutionReleasesTheKey() throws Throwable {
         IdempotencyKeyId id = keyId("order-7");
-        store.reserve(IdempotencyRecord.inProgress(id, "fp-a", clock.instant(), clock.instant().plus(TTL)));
+        store.reserve(IdempotencyRecord.inProgress(id, "other", "fp-a", clock.instant(), clock.instant().plus(TTL)));
         Thread other = new Thread(() -> {
             sleep(50);
-            store.release(id);
+            store.release(id, "other");
         });
         other.start();
 

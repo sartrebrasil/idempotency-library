@@ -5,10 +5,12 @@ import com.example.idempotency.model.IdempotencyRecord;
 import com.example.idempotency.spi.IdempotencyStore;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -47,13 +49,30 @@ public final class InMemoryIdempotencyStore implements IdempotencyStore {
     }
 
     @Override
-    public void complete(IdempotencyKeyId id, String resultType, byte[] resultPayload) {
-        records.computeIfPresent(id, (key, current) -> current.completedWith(resultType, resultPayload));
+    public boolean complete(IdempotencyKeyId id, String owner, String resultType, byte[] resultPayload,
+            Instant expiresAt) {
+        AtomicBoolean done = new AtomicBoolean();
+        records.computeIfPresent(id, (key, current) -> {
+            if (!current.ownedBy(owner) || current.isExpired(clock.instant())) {
+                return current;
+            }
+            done.set(true);
+            return current.completedWith(resultType, resultPayload, expiresAt);
+        });
+        return done.get();
     }
 
     @Override
-    public void release(IdempotencyKeyId id) {
-        records.remove(id);
+    public boolean release(IdempotencyKeyId id, String owner) {
+        AtomicBoolean done = new AtomicBoolean();
+        records.computeIfPresent(id, (key, current) -> {
+            if (!current.ownedBy(owner)) {
+                return current;
+            }
+            done.set(true);
+            return null;
+        });
+        return done.get();
     }
 
     @Override

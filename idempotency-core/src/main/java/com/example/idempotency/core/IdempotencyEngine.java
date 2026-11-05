@@ -79,7 +79,7 @@ public final class IdempotencyEngine {
 
             Optional<IdempotencyRecord> existing = store.reserve(candidate);
             if (existing.isEmpty()) {
-                return runAndRecord(context, operation);
+                return runAndRecord(context, candidate.owner(), operation);
             }
 
             IdempotencyRecord current = existing.get();
@@ -115,18 +115,19 @@ public final class IdempotencyEngine {
         }
     }
 
-    private <T> T runAndRecord(IdempotencyContext context, IdempotentOperation<T> operation) throws Throwable {
+    private <T> T runAndRecord(IdempotencyContext context, String owner, IdempotentOperation<T> operation)
+            throws Throwable {
         T result;
         try {
             result = operation.execute();
         } catch (Throwable failure) {
-            releaseQuietly(context, failure);
+            releaseQuietly(context, owner, failure);
             throw failure;
         }
         if (context.replay() && result != null) {
-            store.complete(context.id(), result.getClass().getName(), serializer.serialize(result));
+            store.complete(context.id(), owner, result.getClass().getName(), serializer.serialize(result), null);
         } else {
-            store.complete(context.id(), null, null);
+            store.complete(context.id(), owner, null, null, null);
         }
         return result;
     }
@@ -188,9 +189,9 @@ public final class IdempotencyEngine {
      * Failing to release must not hide the business failure that caused it, so
      * it travels as a suppressed exception.
      */
-    private void releaseQuietly(IdempotencyContext context, Throwable failure) {
+    private void releaseQuietly(IdempotencyContext context, String owner, Throwable failure) {
         try {
-            store.release(context.id());
+            store.release(context.id(), owner);
         } catch (RuntimeException releaseFailure) {
             failure.addSuppressed(releaseFailure);
         }

@@ -2,6 +2,7 @@ package com.example.idempotency.model;
 
 import java.time.Instant;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Persisted state of one reservation.
@@ -20,6 +21,11 @@ import java.util.Objects;
  * @param resultPayload serialized result, {@code null} until completion
  * @param createdAt     when the key was reserved
  * @param expiresAt     when the key stops being honoured
+ * @param owner         token of the execution holding the reservation; only
+ *                      that owner may complete or release it, so a slow caller
+ *                      whose reservation expired cannot touch the record of the
+ *                      caller that took the key over. {@code null} on records
+ *                      written before owner tokens existed
  */
 public record IdempotencyRecord(
         IdempotencyKeyId id,
@@ -28,7 +34,8 @@ public record IdempotencyRecord(
         String resultType,
         byte[] resultPayload,
         Instant createdAt,
-        Instant expiresAt) {
+        Instant expiresAt,
+        String owner) {
 
     public IdempotencyRecord {
         Objects.requireNonNull(id, "id must not be null");
@@ -37,16 +44,36 @@ public record IdempotencyRecord(
         Objects.requireNonNull(expiresAt, "expiresAt must not be null");
     }
 
-    /** A fresh reservation, before the operation runs. */
-    public static IdempotencyRecord inProgress(IdempotencyKeyId id, String fingerprint, Instant createdAt,
-            Instant expiresAt) {
-        return new IdempotencyRecord(id, IdempotencyStatus.IN_PROGRESS, fingerprint, null, null, createdAt, expiresAt);
+    /** A fresh reservation, before the operation runs, held by {@code owner}. */
+    public static IdempotencyRecord inProgress(IdempotencyKeyId id, String owner, String fingerprint,
+            Instant createdAt, Instant expiresAt) {
+        Objects.requireNonNull(owner, "owner must not be null");
+        return new IdempotencyRecord(id, IdempotencyStatus.IN_PROGRESS, fingerprint, null, null, createdAt, expiresAt,
+                owner);
     }
 
-    /** Same reservation, now carrying the result of a successful execution. */
-    public IdempotencyRecord completedWith(String resultType, byte[] resultPayload) {
+    /** A fresh reservation with a new random owner token. */
+    public static IdempotencyRecord inProgress(IdempotencyKeyId id, String fingerprint, Instant createdAt,
+            Instant expiresAt) {
+        return inProgress(id, newOwner(), fingerprint, createdAt, expiresAt);
+    }
+
+    public static String newOwner() {
+        return UUID.randomUUID().toString();
+    }
+
+    /**
+     * Same reservation, now carrying the result of a successful execution.
+     *
+     * @param newExpiresAt new end of the deduplication window, {@code null} to keep the reservation's
+     */
+    public IdempotencyRecord completedWith(String resultType, byte[] resultPayload, Instant newExpiresAt) {
         return new IdempotencyRecord(id, IdempotencyStatus.COMPLETED, fingerprint, resultType, resultPayload,
-                createdAt, expiresAt);
+                createdAt, newExpiresAt == null ? expiresAt : newExpiresAt, owner);
+    }
+
+    public boolean ownedBy(String candidate) {
+        return owner != null && owner.equals(candidate);
     }
 
     public boolean isExpired(Instant now) {
