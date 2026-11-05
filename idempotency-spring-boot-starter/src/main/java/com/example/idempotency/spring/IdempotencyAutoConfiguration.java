@@ -105,12 +105,6 @@ public class IdempotencyAutoConfiguration {
         return new AnnotatedParameterKeyResolver(metadata);
     }
 
-    @Bean
-    @ConditionalOnWebApplication
-    @ConditionalOnMissingBean
-    public HttpHeaderKeyResolver httpHeaderKeyResolver(IdempotencyProperties properties) {
-        return new HttpHeaderKeyResolver(properties.getHeaderName());
-    }
 
     @Bean
     @ConditionalOnMissingBean
@@ -133,12 +127,24 @@ public class IdempotencyAutoConfiguration {
         return new IdempotencyAdvisor(metadata, interceptor);
     }
 
-    @Bean
+    /** Web-only beans; spring-web is optional, so messaging consumers can use the stores without it. */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = "org.springframework.web.context.request.RequestContextHolder")
     @ConditionalOnWebApplication
-    @ConditionalOnProperty(name = "idempotency.web-exception-handler", matchIfMissing = true)
-    @ConditionalOnMissingBean
-    public com.example.idempotency.spring.web.IdempotencyExceptionHandler idempotencyExceptionHandler() {
-        return new com.example.idempotency.spring.web.IdempotencyExceptionHandler();
+    static class WebConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        HttpHeaderKeyResolver httpHeaderKeyResolver(IdempotencyProperties properties) {
+            return new HttpHeaderKeyResolver(properties.getHeaderName());
+        }
+
+        @Bean
+        @ConditionalOnProperty(name = "idempotency.web-exception-handler", matchIfMissing = true)
+        @ConditionalOnMissingBean
+        com.example.idempotency.spring.web.IdempotencyExceptionHandler idempotencyExceptionHandler() {
+            return new com.example.idempotency.spring.web.IdempotencyExceptionHandler();
+        }
     }
 
     @Configuration(proxyBeanMethods = false)

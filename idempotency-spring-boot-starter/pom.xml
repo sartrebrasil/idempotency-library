@@ -30,14 +30,14 @@
             <artifactId>spring-boot-starter-aspectj</artifactId>
         </dependency>
         <!--
-            spring-web is a plain (not optional) dependency: it carries
-            ResponseEntity, which the serializer needs to replay REST results,
-            and it never starts a server by itself. Web-only beans stay gated
-            behind @ConditionalOnWebApplication.
+            spring-web is optional: web applications already have it, and
+            consumers of the stores alone (messaging-inbox) do not need it.
+            ResponseEntity replay and the web-only beans switch on with it.
         -->
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-web</artifactId>
+            <optional>true</optional>
         </dependency>
         <!-- Compile-only: the HTTP header resolver reads a servlet request when one exists. -->
         <dependency>
