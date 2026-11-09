@@ -1,6 +1,4 @@
--- Schema for idempotency.store=jdbc (PostgreSQL).
--- The library never issues DDL: apply this with Flyway, Liquibase or by hand.
-CREATE TABLE IF NOT EXISTS idempotency_record (
+CREATE TABLE idempotency_record (
     idempotency_key VARCHAR(255)             NOT NULL,
     scope           VARCHAR(255)             NOT NULL,
     status          VARCHAR(20)              NOT NULL,
@@ -10,11 +8,10 @@ CREATE TABLE IF NOT EXISTS idempotency_record (
     created_at      TIMESTAMP WITH TIME ZONE NOT NULL,
     expires_at      TIMESTAMP WITH TIME ZONE NOT NULL,
     -- Token of the execution holding the reservation; complete/release match it.
-    -- Upgrading: ALTER TABLE idempotency_record ADD COLUMN owner VARCHAR(64);
     owner           VARCHAR(64),
     -- The primary key IS the concurrency control: a losing INSERT fails here.
     CONSTRAINT pk_idempotency_record PRIMARY KEY (idempotency_key, scope)
 );
 
 -- Supports the purge job (idempotency.jdbc.cleanup-enabled).
-CREATE INDEX IF NOT EXISTS ix_idempotency_record_expires_at ON idempotency_record (expires_at);
+CREATE INDEX ix_idempotency_record_expires_at ON idempotency_record (expires_at);

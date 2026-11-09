@@ -33,8 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "idempotency.store=jdbc",
         "idempotency.jdbc.cleanup-enabled=false",
         "spring.main.web-application-type=none",
-        "spring.sql.init.mode=always",
-        "spring.sql.init.schema-locations=classpath:schema/idempotency-record-postgres.sql",
+        "spring.flyway.locations=classpath:db/idempotency/{vendor}",
         "spring.autoconfigure.exclude="
                 + "org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration,"
                 + "org.springframework.boot.mongodb.autoconfigure.MongoAutoConfiguration,"

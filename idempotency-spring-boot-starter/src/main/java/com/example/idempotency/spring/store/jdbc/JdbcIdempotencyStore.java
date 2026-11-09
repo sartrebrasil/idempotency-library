@@ -27,7 +27,8 @@ import java.util.Optional;
  *
  * <p>Plain JDBC rather than a JPA entity on purpose: an entity shipped inside a
  * library is not picked up by the application's entity scan, and the SQL here
- * is portable. The table is created by {@code schema/idempotency-record.sql} —
+ * is portable. The table comes from the Flyway migration shipped in
+ * {@code idempotency-core} ({@code classpath:db/idempotency/postgresql}) —
  * the library never issues DDL.
  *
  * <p>{@link TransactionMode#REQUIRES_NEW} (default): writes run in their own

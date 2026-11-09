@@ -153,7 +153,7 @@ entra em laço) e tenha DLQ configurada.
 | Backend | Atomicidade da reserva | Expiração | Observação |
 |---|---|---|---|
 | `memory` | `ConcurrentHashMap.compute` | lazy, na leitura | **não** deduplica entre instâncias; default, avisa no log |
-| `jdbc` | chave primária `(idempotency_key, scope)` | job de purge (`idempotency.jdbc.cleanup-enabled`) | mais durável; DDL em `schema/idempotency-record-*.sql` |
+| `jdbc` | chave primária `(idempotency_key, scope)` | job de purge (`idempotency.jdbc.cleanup-enabled`) | mais durável; migration Flyway em `db/idempotency/postgresql` (idempotency-core) |
 | `redis` | `SET key value NX PX ttl` | TTL nativo, exato | mais rápido; durabilidade depende de AOF/RDB |
 | `mongo` | índice único `(key, scope)` | TTL index + filtro de leitura | monitor de TTL do Mongo roda a cada ~60s |
 
@@ -161,23 +161,16 @@ Por que **JDBC e não JPA**: uma `@Entity` declarada dentro de uma biblioteca
 não entra no `@EntityScan` da aplicação, o que obrigaria todo consumidor a
 listar o pacote da lib. O SQL usado aqui é portável e dispensa isso — é a mesma
 escolha que Spring Session JDBC e Spring Batch fazem. A tabela **não** é criada
-pela biblioteca: aplique o script com Flyway, Liquibase ou à mão.
+pela biblioteca: o `idempotency-core` publica a migration Flyway
+`V202611091200__idempotency_record.sql` (somente PostgreSQL) em
+`classpath:db/idempotency/postgresql`. Inclua esse location no Flyway da aplicação
+(Spring Boot: `spring.flyway.locations=...,classpath:db/idempotency/{vendor}`) ou
+copie o SQL.
 
-```sql
--- schema/idempotency-record-postgres.sql (também há a variante MySQL)
-CREATE TABLE idempotency_record (
-    idempotency_key VARCHAR(255) NOT NULL,
-    scope           VARCHAR(255) NOT NULL,
-    status          VARCHAR(20)  NOT NULL,
-    fingerprint     VARCHAR(64),
-    result_type     VARCHAR(512),
-    result_payload  BYTEA,
-    created_at      TIMESTAMP WITH TIME ZONE NOT NULL,
-    expires_at      TIMESTAMP WITH TIME ZONE NOT NULL,
-    owner           VARCHAR(64),
-    CONSTRAINT pk_idempotency_record PRIMARY KEY (idempotency_key, scope)
-);
-```
+A versão é um timestamp (`V<yyyyMMddHHmm>`) para não colidir com as migrações da
+aplicação nem de outras bibliotecas (ex.: `db/outbox/postgresql`) no mesmo histórico
+do Flyway. Use timestamp também nas migrações da aplicação e ligue
+`spring.flyway.out-of-order=true`. O nome da tabela, `idempotency_record`, é fixo.
 
 **Owner token.** Cada reserva guarda o token de quem a fez (`owner`), e
 `complete`/`release` só valem para esse dono, de forma atômica: `WHERE owner = ?`
