@@ -1,0 +1,25 @@
+{
+  "hints": [
+    {
+      "name": "idempotency.store",
+      "values": [
+        {
+          "value": "memory",
+          "description": "Per-instance map. Does not deduplicate across instances."
+        },
+        {
+          "value": "jdbc",
+          "description": "Relational table. Requires idempotency-store-jdbc."
+        },
+        {
+          "value": "redis",
+          "description": "Redis keys with native expiry. Requires idempotency-store-redis."
+        },
+        {
+          "value": "mongo",
+          "description": "MongoDB collection. Requires idempotency-store-mongo."
+        }
+      ]
+    }
+  ]
+}

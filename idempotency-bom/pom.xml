@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.example.idempotency</groupId>
+        <artifactId>idempotency-library</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>idempotency-bom</artifactId>
+    <packaging>pom</packaging>
+    <name>idempotency-bom</name>
+    <description>Bill of materials: import it to keep every idempotency module on the same version</description>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.example.idempotency</groupId>
+                <artifactId>idempotency-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.example.idempotency</groupId>
+                <artifactId>idempotency-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.example.idempotency</groupId>
+                <artifactId>idempotency-store-jdbc</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.example.idempotency</groupId>
+                <artifactId>idempotency-store-redis</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.example.idempotency</groupId>
+                <artifactId>idempotency-store-mongo</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+</project>

@@ -13,14 +13,9 @@ import com.example.idempotency.spring.key.ExpressionKeyResolver;
 import com.example.idempotency.spring.key.HttpHeaderKeyResolver;
 import com.example.idempotency.spring.key.KeyResolver;
 import com.example.idempotency.spring.serializer.JacksonResultSerializer;
-import com.example.idempotency.spring.store.jdbc.IdempotencyCleanupScheduler;
-import com.example.idempotency.spring.store.jdbc.JdbcIdempotencyStore;
-import com.example.idempotency.spring.store.mongo.MongoIdempotencyStore;
-import com.example.idempotency.spring.store.redis.RedisIdempotencyStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -30,11 +25,6 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Role;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.EnableScheduling;
-import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.cfg.DateTimeFeature;
@@ -44,11 +34,11 @@ import java.time.Clock;
 import java.util.List;
 
 /**
- * Wires the engine, the key resolvers, the aspect and exactly one store.
+ * Wires the engine, the key resolvers, the aspect and the in-memory fallback store.
  *
- * <p>The store is chosen by {@code idempotency.store} instead of being guessed
- * from the classpath: an application that has both a datasource and Redis
- * should say which one guards its operations.
+ * <p>A store module ({@code idempotency-store-*}) on the classpath wins on its own; the
+ * in-memory store is only the fallback. With several store modules, {@code idempotency.store}
+ * picks one.
  */
 @AutoConfiguration
 @EnableConfigurationProperties(IdempotencyProperties.class)
@@ -155,62 +145,8 @@ public class IdempotencyAutoConfiguration {
         @ConditionalOnMissingBean(IdempotencyStore.class)
         InMemoryIdempotencyStore inMemoryIdempotencyStore(Clock clock) {
             log.warn("Idempotency is using the in-memory store: keys are not shared between instances. "
-                    + "Set idempotency.store to jdbc, redis or mongo for a distributed guarantee.");
+                    + "Add idempotency-store-jdbc, -redis or -mongo for a distributed guarantee.");
             return new InMemoryIdempotencyStore(clock);
-        }
-    }
-
-    @Configuration(proxyBeanMethods = false)
-    @ConditionalOnProperty(name = "idempotency.store", havingValue = "jdbc")
-    @ConditionalOnClass(JdbcTemplate.class)
-    static class JdbcStoreConfiguration {
-
-        @Bean
-        @ConditionalOnMissingBean(IdempotencyStore.class)
-        JdbcIdempotencyStore jdbcIdempotencyStore(JdbcTemplate jdbcTemplate,
-                PlatformTransactionManager transactionManager, Clock clock, IdempotencyProperties properties) {
-            return new JdbcIdempotencyStore(jdbcTemplate, transactionManager, clock,
-                    properties.getJdbc().getTransactionMode());
-        }
-
-        @Configuration(proxyBeanMethods = false)
-        @ConditionalOnProperty(name = "idempotency.jdbc.cleanup-enabled", matchIfMissing = true)
-        @EnableScheduling
-        static class CleanupConfiguration {
-
-            @Bean
-            @ConditionalOnBean(JdbcIdempotencyStore.class)
-            @ConditionalOnMissingBean
-            IdempotencyCleanupScheduler idempotencyCleanupScheduler(JdbcIdempotencyStore store) {
-                return new IdempotencyCleanupScheduler(store);
-            }
-        }
-    }
-
-    @Configuration(proxyBeanMethods = false)
-    @ConditionalOnProperty(name = "idempotency.store", havingValue = "redis")
-    @ConditionalOnClass(StringRedisTemplate.class)
-    static class RedisStoreConfiguration {
-
-        @Bean
-        @ConditionalOnMissingBean(IdempotencyStore.class)
-        RedisIdempotencyStore redisIdempotencyStore(StringRedisTemplate redisTemplate,
-                ObjectMapper idempotencyObjectMapper, IdempotencyProperties properties, Clock clock) {
-            return new RedisIdempotencyStore(redisTemplate, idempotencyObjectMapper,
-                    properties.getRedis().getKeyPrefix(), clock);
-        }
-    }
-
-    @Configuration(proxyBeanMethods = false)
-    @ConditionalOnProperty(name = "idempotency.store", havingValue = "mongo")
-    @ConditionalOnClass(MongoTemplate.class)
-    static class MongoStoreConfiguration {
-
-        @Bean(initMethod = "ensureIndexes")
-        @ConditionalOnMissingBean(IdempotencyStore.class)
-        MongoIdempotencyStore mongoIdempotencyStore(MongoTemplate mongoTemplate, IdempotencyProperties properties,
-                Clock clock) {
-            return new MongoIdempotencyStore(mongoTemplate, properties.getMongo().getCollection(), clock);
         }
     }
 }

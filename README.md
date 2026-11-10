@@ -6,29 +6,90 @@ repetidas. Funciona em endpoints REST, consumidores de fila, jobs agendados e
 em qualquer código Java — o motor não depende de Spring.
 
 ```
-idempotency-parent
+idempotency-library
+├── idempotency-bom                  # alinha a versão de todos os módulos
 ├── idempotency-core                 # API, motor e SPI. Zero dependências.
-└── idempotency-spring-boot-starter  # AOP + auto-configuração + stores
+├── idempotency-spring-boot-starter  # AOP + auto-configuração + store em memória
+├── idempotency-store-jdbc           # store JDBC + migration Flyway (PostgreSQL)
+├── idempotency-store-redis          # store Redis
+└── idempotency-store-mongo          # store MongoDB
 ```
 
 | Módulo | O que traz |
 |---|---|
+| `idempotency-bom` | opcional: só `dependencyManagement`, para quem declara mais de um módulo |
 | `idempotency-core` | `@Idempotent`, `@IdempotentKey`, `IdempotencyEngine`, SPI `IdempotencyStore`/`ResultSerializer`, store em memória |
-| `idempotency-spring-boot-starter` | aspecto para `@Idempotent`, resolvedores de chave, serializer Jackson, handler HTTP e as stores JDBC / Redis / MongoDB |
+| `idempotency-spring-boot-starter` | aspecto para `@Idempotent`, resolvedores de chave, serializer Jackson, handler HTTP e store em memória |
+| `idempotency-store-jdbc` / `-redis` / `-mongo` | uma store por módulo, com auto-configuração e propriedades `idempotency.<backend>.*` próprias; trazem o starter e o driver do backend |
 
 ## Instalação
+
+**Uma dependência**, a da store que você usa. Ela traz o starter e o driver do
+backend:
 
 ```xml
 <dependency>
     <groupId>com.example.idempotency</groupId>
-    <artifactId>idempotency-spring-boot-starter</artifactId>
+    <artifactId>idempotency-store-jdbc</artifactId> <!-- ou -redis / -mongo -->
     <version>0.1.0-SNAPSHOT</version>
 </dependency>
 ```
 
-O starter só declara o backend escolhido como dependência `optional` — traga
-para o seu projeto `spring-boot-starter-jdbc`, `spring-boot-starter-data-redis`
-ou `spring-boot-starter-data-mongodb`, conforme o caso.
+Essa mesma dependência atende endpoints REST, listeners de fila, jobs e
+services no mesmo app: o `@Idempotent` funciona em qualquer bean Spring, e só a
+origem da chave muda (header HTTP ou o próprio dado). Não existe módulo "web" ou
+"messaging" separado.
+
+```java
+@RestController
+class PedidoController {
+    @PostMapping("/pedidos")
+    @Idempotent                                   // chave: header Idempotency-Key
+    ResponseEntity<Pedido> criar(@RequestBody CriarPedido req) { ... }
+}
+
+@Component
+class PedidoListener {
+    @KafkaListener(topics = "pedidos")
+    @Idempotent(key = "#msg.pedidoId")            // chave: campo da mensagem
+    void consumir(PedidoMessage msg) { ... }
+}
+```
+
+Nenhuma propriedade é obrigatória: o módulo de store no classpath é usado sozinho.
+Sem nenhum módulo, a lib cai na store em memória, que não deduplica entre
+instâncias. `idempotency.store` só é necessária para desempatar quando houver
+mais de um módulo de store. Se faltar o módulo da store configurada, o startup
+falha dizendo qual dependência adicionar.
+
+Para usar só a store em memória (testes, protótipos), declare
+`idempotency-spring-boot-starter` no lugar do módulo de store.
+
+### BOM (opcional)
+
+Só vale a pena quando o app declara mais de um módulo da lib (por exemplo
+`idempotency-core` direto, ou duas stores). Ele mantém todos na mesma versão e
+dispensa o `<version>` em cada um:
+
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>com.example.idempotency</groupId>
+            <artifactId>idempotency-bom</artifactId>
+            <version>0.1.0-SNAPSHOT</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```
+
+## Versionamento
+
+A versão vive em um só lugar, a propriedade `revision` do `pom.xml` raiz; todos
+os módulos a herdam e o `flatten-maven-plugin` a resolve nos POMs publicados.
+Para liberar: `mvn -Drevision=1.2.0 deploy`.
 
 ## Uso em 30 segundos
 
@@ -52,8 +113,7 @@ a lógica de negócio de novo.
 
 ```yaml
 idempotency:
-  store: jdbc          # memory (default) | jdbc | redis | mongo
-  default-ttl: PT24H
+  default-ttl: PT24H   # opcional; a store vem do módulo no classpath
 ```
 
 ## Fora de HTTP: fila, job, service
@@ -152,20 +212,20 @@ entra em laço) e tenha DLQ configurada.
 
 | Backend | Atomicidade da reserva | Expiração | Observação |
 |---|---|---|---|
-| `memory` | `ConcurrentHashMap.compute` | lazy, na leitura | **não** deduplica entre instâncias; default, avisa no log |
-| `jdbc` | chave primária `(idempotency_key, scope)` | job de purge (`idempotency.jdbc.cleanup-enabled`) | mais durável; migration Flyway em `db/idempotency/postgresql` (idempotency-core) |
+| `memory` | `ConcurrentHashMap.compute` | lazy, na leitura | **não** deduplica entre instâncias; usada quando não há módulo de store, avisa no log |
+| `jdbc` | chave primária `(idempotency_key, scope)` | job de purge (`idempotency.jdbc.cleanup-enabled`) | mais durável; migration Flyway em `db/idempotency/postgresql` (idempotency-store-jdbc) |
 | `redis` | `SET key value NX PX ttl` | TTL nativo, exato | mais rápido; durabilidade depende de AOF/RDB |
 | `mongo` | índice único `(key, scope)` | TTL index + filtro de leitura | monitor de TTL do Mongo roda a cada ~60s |
 
 Por que **JDBC e não JPA**: uma `@Entity` declarada dentro de uma biblioteca
 não entra no `@EntityScan` da aplicação, o que obrigaria todo consumidor a
 listar o pacote da lib. O SQL usado aqui é portável e dispensa isso — é a mesma
-escolha que Spring Session JDBC e Spring Batch fazem. A tabela **não** é criada
-pela biblioteca: o `idempotency-core` publica a migration Flyway
-`V202611091200__idempotency_record.sql` (somente PostgreSQL) em
-`classpath:db/idempotency/postgresql`. Inclua esse location no Flyway da aplicação
-(Spring Boot: `spring.flyway.locations=...,classpath:db/idempotency/{vendor}`) ou
-copie o SQL.
+escolha que Spring Session JDBC e Spring Batch fazem. O `idempotency-store-jdbc`
+publica a migration Flyway `V202611091200__idempotency_record.sql` (somente
+PostgreSQL) em `classpath:db/idempotency/postgresql`. Se a aplicação usa Flyway,
+esse location é adicionado sozinho ao Flyway dela (o vendor é detectado pela URL
+do datasource; quem já o lista em `spring.flyway.locations` não ganha duplicata).
+Sem Flyway, ou com `idempotency.jdbc.flyway-enabled=false`, copie o SQL.
 
 A versão é um timestamp (`V<yyyyMMddHHmm>`) para não colidir com as migrações da
 aplicação nem de outras bibliotecas (ex.: `db/outbox/postgresql`) no mesmo histórico
@@ -188,11 +248,12 @@ apenas expiram.
 
 | Property | Default | Descrição |
 |---|---|---|
-| `idempotency.store` | `memory` | `memory` \| `jdbc` \| `redis` \| `mongo` |
+| `idempotency.store` | — (detectada) | `memory` \| `jdbc` \| `redis` \| `mongo`; obrigatória só com mais de um módulo de store |
 | `idempotency.default-ttl` | `PT24H` | TTL quando a anotação não define |
 | `idempotency.header-name` | `Idempotency-Key` | header lido em requisições HTTP |
 | `idempotency.poll-interval` | `PT0.05S` | intervalo de polling do `waitForCompletion` |
 | `idempotency.web-exception-handler` | `true` | mapeia as exceções para 400/409/422 |
+| `idempotency.jdbc.flyway-enabled` | `true` | adiciona `classpath:db/idempotency/<vendor>` ao Flyway da aplicação |
 | `idempotency.jdbc.cleanup-enabled` | `true` | job de limpeza de registros expirados |
 | `idempotency.jdbc.cleanup-interval` | `PT15M` | intervalo do job |
 | `idempotency.jdbc.transaction-mode` | `requires-new` | `requires-new`: escritas em transação própria. `join`: escritas entram na transação de quem chama (reserva num savepoint), confirmando junto com o negócio. `join` exige transaction manager com savepoints, como o `DataSourceTransactionManager` |
@@ -233,8 +294,10 @@ sua implementação já vem com os testes de comportamento prontos.
   `fingerprintPayload = false`.
 - **Tipos genéricos** no retorno (`List<Pedido>`) perdem o tipo do elemento no
   replay — o tipo gravado é a classe concreta do resultado.
-- **`store: memory`** não deduplica entre instâncias. É o default para que um
-  teste local funcione sem infraestrutura, e loga um aviso no startup.
+- **A store em memória** não deduplica entre instâncias. Ela é usada quando não
+  há módulo de store no classpath, para que um teste local funcione sem
+  infraestrutura, e loga um aviso no startup. Em produção, confira que o módulo
+  `idempotency-store-*` está nas dependências de runtime.
 
 ## Build e testes
 

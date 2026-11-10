@@ -5,19 +5,25 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.example.idempotency</groupId>
-    <artifactId>idempotency-parent</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <artifactId>idempotency-library</artifactId>
+    <version>${revision}</version>
     <packaging>pom</packaging>
 
-    <name>idempotency-parent</name>
+    <name>idempotency-library</name>
     <description>General purpose idempotency library with pluggable stores</description>
 
     <modules>
+        <module>idempotency-bom</module>
         <module>idempotency-core</module>
         <module>idempotency-spring-boot-starter</module>
+        <module>idempotency-store-jdbc</module>
+        <module>idempotency-store-redis</module>
+        <module>idempotency-store-mongo</module>
     </modules>
 
     <properties>
+        <!-- Single place the library version lives: release with -Drevision=1.2.0. -->
+        <revision>0.1.0-SNAPSHOT</revision>
         <java.version>21</java.version>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -99,6 +105,34 @@
                 </plugin>
             </plugins>
         </pluginManagement>
+        <plugins>
+            <!-- Replaces ${revision} in the installed/deployed poms so consumers see a literal version. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>flatten-maven-plugin</artifactId>
+                <version>1.7.0</version>
+                <configuration>
+                    <updatePomFile>true</updatePomFile>
+                    <flattenMode>resolveCiFriendliesOnly</flattenMode>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>flatten</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>flatten</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>flatten-clean</id>
+                        <phase>clean</phase>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
 
 </project>

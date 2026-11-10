@@ -6,13 +6,13 @@
 
     <parent>
         <groupId>com.example.idempotency</groupId>
-        <artifactId>idempotency-parent</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
+        <artifactId>idempotency-library</artifactId>
+        <version>${revision}</version>
     </parent>
 
     <artifactId>idempotency-spring-boot-starter</artifactId>
     <name>idempotency-spring-boot-starter</name>
-    <description>Spring Boot auto-configuration, AOP interceptor and JPA/Redis/MongoDB stores</description>
+    <description>Spring Boot auto-configuration, AOP interceptor and in-memory store; backends live in idempotency-store-*</description>
 
     <dependencies>
         <dependency>
@@ -57,31 +57,7 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Store backends: bring in only the one you configure. -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-jdbc</artifactId>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-redis</artifactId>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-mongodb</artifactId>
-            <optional>true</optional>
-        </dependency>
-
         <!-- Tests -->
-        <dependency>
-            <groupId>com.example.idempotency</groupId>
-            <artifactId>idempotency-core</artifactId>
-            <version>${project.version}</version>
-            <type>test-jar</type>
-            <scope>test</scope>
-        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -97,44 +73,10 @@
             <artifactId>spring-boot-starter-webmvc-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.postgresql</groupId>
-            <artifactId>postgresql</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-flyway</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-database-postgresql</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>postgresql</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>mongodb</artifactId>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
     <build>
         <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-failsafe-plugin</artifactId>
-            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
